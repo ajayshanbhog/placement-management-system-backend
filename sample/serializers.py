@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Sample,Faculty,Company,Student
+from .models import Sample,Faculty,Company,Student,Applicants
 from django.contrib.auth.hashers import make_password
 from .models import Internship, FullTime
 
@@ -84,3 +84,11 @@ class FullTimeSerializer(serializers.ModelSerializer):
         model = FullTime
         fields = ['job_id', 'job_title', 'location', 'package', 'cutoff', 'company_id']
 
+class ApplicantSerializer(serializers.ModelSerializer):
+    student = StudentSerializer()
+    internship = InternshipSerializer()
+    job = FullTimeSerializer()
+
+    class Meta:
+        model = Applicants
+        fields = ['applicant_id', 'student', 'type', 'internship', 'job', 'company']

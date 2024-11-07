@@ -111,4 +111,21 @@ class Rounds(models.Model):
         return f"Round {self.round_no} - {self.status}"
 
 
+class Applicants(models.Model):
+    APPLICATION_TYPE_CHOICES = [
+        ('Internship', 'Internship'),
+        ('FullTime', 'FullTime')
+    ]
 
+    applicant_id = models.AutoField(primary_key=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    type = models.CharField(max_length=10, choices=APPLICATION_TYPE_CHOICES)
+    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.SET_NULL)
+    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return f"{self.student.name} - {self.type} - {self.company.name}"
+
+    class Meta:
+        unique_together = ('student', 'company', 'type', 'internship', 'job')

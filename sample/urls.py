@@ -46,7 +46,11 @@ urlpatterns = [
 
     path('api/internships/<str:srn>/', views.internship_list_by_srn, name='internship-list-by-srn'),
     path('api/fulltimes/<str:srn>/', views.fulltime_list_by_srn, name='fulltime-list-by-srn'),
-]
 
+
+    path('api/apply/', views.apply, name="apply"),
+    path('api/check_application_status/', views.check_application_status, name='check-application-status'),
+    path('api/applicants/company/<int:company_id>/', views.get_applicants_for_company),
+]
 
 

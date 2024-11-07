@@ -9,9 +9,9 @@ from django.contrib.auth.hashers import check_password
 
 
 from rest_framework import views
-from .models import Faculty, Company, Student 
+from .models import Faculty, Company, Student, Applicants 
 
-from .serializers import FacultySerializer, CompanySerializer, StudentSerializer
+from .serializers import FacultySerializer, CompanySerializer, StudentSerializer, ApplicantSerializer
 from django.shortcuts import get_object_or_404
 
 
@@ -258,3 +258,162 @@ def fulltime_list_by_srn(request, srn):
         fulltime_jobs = dictfetchall(cursor)
 
     return Response(fulltime_jobs)
+
+
+from django.views.decorators.csrf import csrf_exempt
+import json
+
+@csrf_exempt
+def apply(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        username = data.get("username")
+        app_type = data.get("type")
+        app_id = data.get("id")
+
+        # Fetch student instance
+        try:
+            student = Student.objects.get(SRN=username)
+        except Student.DoesNotExist:
+            return JsonResponse({"status": "error", "message": "Student not found"}, status=404)
+
+        # Check application type and apply accordingly
+        if app_type == "Internship":
+            try:
+                internship = Internship.objects.get(internship_id=app_id)
+                company = internship.company
+                # Check if the student has already applied
+                if Applicants.objects.filter(student=student, internship=internship).exists():
+                    return JsonResponse({"status": "error", "message": "Already applied"})
+                # Otherwise, create a new application
+                Applicants.objects.create(student=student, company=company, type="Internship", internship=internship)
+            except Internship.DoesNotExist:
+                return JsonResponse({"status": "error", "message": "Internship not found"}, status=404)
+        elif app_type == "FullTime":
+            try:
+                job = FullTime.objects.get(job_id=app_id)
+                company = job.company
+                # Check if the student has already applied
+                if Applicants.objects.filter(student=student, job=job).exists():
+                    return JsonResponse({"status": "error", "message": "Already applied"})
+                # Otherwise, create a new application
+                Applicants.objects.create(student=student, company=company, type="FullTime", job=job)
+            except FullTime.DoesNotExist:
+                return JsonResponse({"status": "error", "message": "Full-time job not found"}, status=404)
+
+        return JsonResponse({"status": "success", "message": "Application successful"})
+    return JsonResponse({"status": "error", "message": "Invalid request"}, status=400)
+
+
+
+
+
+
+
+
+
+@api_view(['GET'])
+def check_application_status(request):
+    # Get parameters from the request
+    student_id = request.GET.get('student_id')  # Use 'student_id' instead of 'srn'
+    internship_id = request.GET.get('internship_id')
+    job_id = request.GET.get('job_id')
+
+    # Check if either internship_id or job_id is provided
+    if not internship_id and not job_id:
+        return Response({"error": "Must provide either 'internship_id' or 'job_id'"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Check if the student exists using student_id
+    student_query = "SELECT student_id FROM sample_student WHERE student_id = %s"  # Query for student_id
+    with connection.cursor() as cursor:
+        cursor.execute(student_query, [student_id])
+        student = cursor.fetchone()  # Fetch the first row only
+
+    if not student:
+        return Response({"error": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Check if the student has applied to the internship or job
+    if internship_id:
+        application_query = """
+            SELECT 1
+            FROM sample_applicants
+            WHERE student_id = %s AND internship_id = %s
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(application_query, [student_id, internship_id])
+            application_exists = cursor.fetchone() is not None  # Check if a matching record exists
+
+    elif job_id:
+        application_query = """
+            SELECT 1
+            FROM sample_applicants
+            WHERE student_id = %s AND job_id = %s
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(application_query, [student_id, job_id])
+            application_exists = cursor.fetchone() is not None  # Check if a matching record exists
+
+    # Return the application status
+    if application_exists:
+        return Response({"status": "Applied"}, status=status.HTTP_200_OK)
+    else:
+        return Response({"status": "Not Applied"}, status=status.HTTP_200_OK)
+
+
+
+
+# Define a custom SQL query to fetch the required applicant data
+@api_view(['GET'])
+def get_applicants_for_company(request, company_id):
+    query = '''
+        SELECT 
+            a.applicant_id,
+            s.student_id,
+            s.name AS student_name,
+            s.SRN,
+            s.email,
+            s.gender,
+            s.ph_number,
+            s.cgpa,
+            s.faculty_advisor,
+            i.name AS internship_name,
+            f.job_title AS job_title,
+            a.type
+        FROM 
+            sample_applicants a
+        LEFT JOIN sample_student s ON a.student_id = s.student_id
+        LEFT JOIN sample_internship i ON a.internship_id = i.internship_id
+        LEFT JOIN sample_fulltime f ON a.job_id = f.job_id
+        WHERE a.company_id = %s
+    '''
+
+    # Execute the SQL query
+    with connection.cursor() as cursor:
+        cursor.execute(query, [company_id])
+        results = cursor.fetchall()
+
+    # Format the results as a list of dictionaries for the response
+    applicants = []
+    for row in results:
+        applicants.append({
+            'applicant_id': row[0],
+            'student': {
+                'student_id': row[1],
+                'name': row[2],
+                'SRN': row[3],
+                'email': row[4],
+                'gender': row[5],
+                'ph_number': row[6],
+                'cgpa': row[7],
+                'faculty_advisor': row[8],
+            },
+            'internship': {
+                'name': row[9] if row[9] else None
+            },
+            'job': {
+                'job_title': row[10] if row[10] else None
+            },
+            'type': row[11]
+        })
+
+    return Response(applicants)
