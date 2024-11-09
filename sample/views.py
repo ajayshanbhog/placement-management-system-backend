@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import make_password
 
 
 from rest_framework import views
@@ -417,3 +418,229 @@ def get_applicants_for_company(request, company_id):
         })
 
     return Response(applicants)
+
+
+
+
+
+
+
+
+
+# Edit Api for profiles
+
+
+
+# Faculty Update API - Only password, email, and phone number can be changed
+@api_view(['PUT'])
+def update_faculty_profile(request, faculty_id):
+    """
+    Update Faculty profile by faculty_id, allowing partial updates.
+    """
+    try:
+        # Check if the faculty member exists
+        try:
+            Faculty.objects.get(faculty_id=faculty_id)
+        except Faculty.DoesNotExist:
+            return Response({'message': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Define fields to update
+        fields_to_update = {}
+
+        if request.data.get('role') is not None:
+            fields_to_update['role'] = request.data.get('role')
+
+        if request.data.get('staff_id') is not None:
+            fields_to_update['staff_id'] = request.data.get('staff_id')
+
+        if request.data.get('name') is not None:
+            fields_to_update['name'] = request.data.get('name')
+
+        if request.data.get('email') is not None:
+            fields_to_update['email'] = request.data.get('email')
+
+        if request.data.get('ph_number') is not None:
+            fields_to_update['ph_number'] = request.data.get('ph_number')
+
+        if request.data.get('department') is not None:
+            fields_to_update['department'] = request.data.get('department')
+
+        if request.data.get('password') is not None:
+            fields_to_update['password'] = make_password(request.data.get('password'))
+
+        # Construct dynamic SQL query for partial updates
+        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+        query = f"UPDATE sample_faculty SET {set_clause} WHERE faculty_id = %s"
+
+        # Execute query with values in correct order
+        with connection.cursor() as cursor:
+            cursor.execute(query, list(fields_to_update.values()) + [faculty_id])
+
+        return Response({"message": "Faculty profile updated successfully"}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Student Update API - Only password, email, and phone number can be changed
+@api_view(['PUT'])
+def update_student_profile(request, student_id):
+    """
+    Update Student profile by student_id, allowing partial updates.
+    """
+    try:
+        # Check if the student exists
+        try:
+            Student.objects.get(student_id=student_id)
+        except Student.DoesNotExist:
+            return Response({'message': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Define fields to update
+        fields_to_update = {}
+
+        if request.data.get('name') is not None:
+            fields_to_update['name'] = request.data.get('name')
+
+        if request.data.get('email') is not None:
+            fields_to_update['email'] = request.data.get('email')
+
+        if request.data.get('ph_number') is not None:
+            fields_to_update['ph_number'] = request.data.get('ph_number')
+
+        if request.data.get('password') is not None:
+            fields_to_update['password'] = make_password(request.data.get('password'))
+
+        # Construct dynamic SQL query for partial updates
+        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+        query = f"UPDATE sample_student SET {set_clause} WHERE student_id = %s"
+
+        # Execute query with values in correct order
+        with connection.cursor() as cursor:
+            cursor.execute(query, list(fields_to_update.values()) + [student_id])
+
+        return Response({"message": "Student profile updated successfully"}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Company Update API
+
+@api_view(['PUT'])
+def update_company_profile(request, company_id):
+    """
+    Update Company profile by company_id, allowing partial updates.
+    """
+    try:
+        # Check if the company exists
+        try:
+            Company.objects.get(company_id=company_id)
+        except Company.DoesNotExist:
+            return Response({'message': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get allowed fields from request body
+        fields_to_update = {}
+        
+        if request.data.get('name') is not None:
+            fields_to_update['name'] = request.data.get('name')
+        
+        if request.data.get('type') is not None:
+            fields_to_update['type'] = request.data.get('type')
+        
+        if request.data.get('designation_role') is not None:
+            fields_to_update['designation_role'] = request.data.get('designation_role')
+        
+        if request.data.get('location') is not None:
+            fields_to_update['location'] = request.data.get('location')
+        
+        if request.data.get('password') is not None:
+            fields_to_update['password'] = make_password(request.data.get('password'))
+
+        # Construct dynamic SQL query for partial updates
+        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+        query = f"UPDATE sample_company SET {set_clause} WHERE company_id = %s"
+        
+        # Execute query with values in correct order
+        with connection.cursor() as cursor:
+            cursor.execute(query, list(fields_to_update.values()) + [company_id])
+
+        return Response({"message": "Company profile updated successfully"}, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from django.views.decorators.http import require_http_methods
+
+@require_http_methods(["GET"])
+def get_faculty_profile(request, user_id):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT faculty_id, role, staff_id, name, email, ph_number, department FROM sample_faculty WHERE faculty_id = %s", [user_id])
+        row = cursor.fetchone()
+
+    if row:
+        data = {
+            "role": row[1],
+            "staff_id": row[2],
+            "name": row[3],
+            "email": row[4],
+            "ph_number": row[5],
+            "department": row[6],
+        }
+        return JsonResponse(data)
+    else:
+        return JsonResponse({"error": "Faculty not found"}, status=404)
+    
+
+@require_http_methods(["GET"])
+def get_student_profile(request, user_id):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT student_id, name, SRN, branch, dob, email, ph_number, gender, cgpa, faculty_advisor FROM sample_student WHERE student_id = %s", [user_id])
+        row = cursor.fetchone()
+
+    if row:
+        data = {
+            "name": row[1],
+            "SRN": row[2],
+            "branch": row[3],
+            "dob": row[4],
+            "email": row[5],
+            "ph_number": row[6],
+            "gender": row[7],
+            "cgpa": row[8],
+            "faculty_advisor": row[9],
+        }
+        return JsonResponse(data)
+    else:
+        return JsonResponse({"error": "Student not found"}, status=404)   
+    
+
+@require_http_methods(["GET"])
+def get_company_profile(request, user_id):
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT company_id, name, type, designation_role, location, package FROM sample_company WHERE company_id = %s", [user_id])
+        row = cursor.fetchone()
+
+    if row:
+        data = {
+            "name": row[1],
+            "type": row[2],
+            "designation_role": row[3],
+            "location": row[4],
+            "package": row[5],
+        }
+        return JsonResponse(data)
+    else:
+        return JsonResponse({"error": "Company not found"}, status=404)    

@@ -42,7 +42,7 @@ class Student(models.Model):
     faculty_advisor = models.CharField(max_length=50, blank=True, null=True)
     user_id = models.ForeignKey(Faculty, null=True, on_delete=models.SET_NULL)
     password = models.CharField(max_length=255)
-
+    
     def __str__(self):
         return self.name
 

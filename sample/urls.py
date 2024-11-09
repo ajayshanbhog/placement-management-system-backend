@@ -51,6 +51,15 @@ urlpatterns = [
     path('api/apply/', views.apply, name="apply"),
     path('api/check_application_status/', views.check_application_status, name='check-application-status'),
     path('api/applicants/company/<int:company_id>/', views.get_applicants_for_company),
+
+
+    path('update/faculty/<int:faculty_id>/', views.update_faculty_profile, name='update_faculty'),
+    path('update/student/<int:student_id>/', views.update_student_profile, name='update_student'),
+    path('update/company/<int:company_id>/', views.update_company_profile, name='update_company'),
+
+    path('get/faculty/<int:user_id>/', views.get_faculty_profile, name='get_faculty_profile'),
+    path('get/student/<int:user_id>/', views.get_student_profile, name='get_student_profile'),
+    path('get/company/<int:user_id>/', views.get_company_profile, name='get_company_profile'),
 ]
 
 
