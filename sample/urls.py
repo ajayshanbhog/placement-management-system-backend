@@ -14,10 +14,12 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path
 from sample import views
 from . import views
+
 
 
 urlpatterns = [
@@ -33,11 +35,11 @@ urlpatterns = [
 
      # Internship URLs
     path('api/internship/', views.InternshipListCreateView.as_view(), name='internship-list-create'),
-    path('api/internship/<int:pk>/', views.InternshipRetrieveUpdateDestroyView.as_view(), name='internship-detail'),
+    #path('api/internship/<int:pk>/', views.InternshipRetrieveUpdateDestroyView.as_view(), name='internship-detail'),
 
     # FullTime Job URLs
     path('api/fulltime/', views.FullTimeListCreateView.as_view(), name='fulltime-list-create'),
-    path('api/fulltime/<int:pk>/', views.FullTimeRetrieveUpdateDestroyView.as_view(), name='fulltime-detail'),
+    #path('api/fulltime/<int:pk>/', views.FullTimeRetrieveUpdateDestroyView.as_view(), name='fulltime-detail'),
 
     path('api/students/<int:faculty_user_id>/', views.get_students_by_faculty, name='get_students_by_faculty'),
 
@@ -60,6 +62,14 @@ urlpatterns = [
     path('get/faculty/<int:user_id>/', views.get_faculty_profile, name='get_faculty_profile'),
     path('get/student/<int:user_id>/', views.get_student_profile, name='get_student_profile'),
     path('get/company/<int:user_id>/', views.get_company_profile, name='get_company_profile'),
+
+    path('api/create/round/', views.create_round, name='create_round'),
+
+    path('api/internship_rounds/<int:student_id>/', views.internship_rounds, name='internship-rounds'),
+    path('api/fulltime_rounds/<int:student_id>/', views.job_rounds, name='job-rounds'),
+
+    path('api/fulltime/<int:pk>/', views.fulltime_detail, name='fulltime-detail'),
+    path('api/internship/<int:pk>/', views.internship_detail, name='internship-detail'),
 ]
 
 

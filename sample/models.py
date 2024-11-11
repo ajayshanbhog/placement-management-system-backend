@@ -1,4 +1,5 @@
 from django.db import models
+from datetime import date, time
 
 class Sample(models.Model):
     name = models.CharField(max_length=200)
@@ -89,26 +90,33 @@ class Internship(models.Model):
 
 
 class Rounds(models.Model):
+   
+    # Constants for 'Status' field
     STATUS_CHOICES = [
         ('Scheduled', 'Scheduled'),
         ('Completed', 'Completed'),
         ('Cancelled', 'Cancelled')
     ]
 
+    TYPE_CHOICES = [
+        ('Internship', 'Internship'),
+        ('FullTime', 'FullTime')
+    ]
+    # Fields
     round_id = models.AutoField(primary_key=True)
-    type = models.CharField(max_length=50)
-    round_no = models.IntegerField()
-    no_of_students = models.IntegerField(null=True, blank=True)
-    datetime = models.DateTimeField(null=True, blank=True)
-    company = models.ForeignKey(Company, null=True, on_delete=models.SET_NULL, related_name="company_rounds")
-    company_name = models.CharField(max_length=100, blank=True, null=True)
-    internship = models.ForeignKey(Internship, null=True, on_delete=models.SET_NULL)
-    comp_id = models.ForeignKey(Company, null=True, on_delete=models.SET_NULL, related_name="comp_id_rounds")
-    fulltime = models.ForeignKey(FullTime, null=True, on_delete=models.SET_NULL)
+    round_no = models.IntegerField(default=-1)
+    round_name = models.CharField(max_length=100,default='Not Mentioned')  # New field for Round Name
+    date = models.DateField(default=date.today)  # Date in YYYYMMDD format
+    time_scheduled = models.TimeField(default=time(9, 0))  # Separate field for time
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Scheduled')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE,default=None)
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=None)
+    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.SET_NULL,default=None)
+    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.SET_NULL,default=None)
 
     def __str__(self):
-        return f"Round {self.round_no} - {self.status}"
+        return f"Round {self.round_no} - {self.round_name} - {self.get_status_display()}"
+
 
 
 class Applicants(models.Model):

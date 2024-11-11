@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404
 
 
 from rest_framework import generics
-from .models import Internship, FullTime
+from .models import Internship, FullTime, Rounds
 from .serializers import InternshipSerializer, FullTimeSerializer, StudentSerializerForFaculty
 
 
@@ -412,7 +412,7 @@ def get_applicants_for_company(request, company_id):
                 'name': row[9] if row[9] else None
             },
             'job': {
-                'job_title': row[10] if row[10] else None
+                'name': row[10] if row[10] else None
             },
             'type': row[11]
         })
@@ -644,3 +644,213 @@ def get_company_profile(request, user_id):
         return JsonResponse(data)
     else:
         return JsonResponse({"error": "Company not found"}, status=404)    
+    
+
+
+
+
+from datetime import date as current_date
+
+@csrf_exempt
+def create_round(request):
+    if request.method == "POST":
+        try:
+            # Load JSON data from the request body
+            data = json.loads(request.body)
+            print(data)
+            # Retrieve data with default values
+            company_id = data.get('company_id')
+            round_no = data.get('round_no', -1)
+            round_name = data.get('round_name', 'Not Mentioned')
+            date = data.get('date', current_date.today())  # Default to today's date if not provided
+            time_scheduled = data.get('time_scheduled', '09:00')  # Default time
+            status = data.get('status', 'Scheduled')  # Default status
+            type = data.get('type', 'Not Mentioned')  # Default type
+            internship_id = data.get('internship_id', None)
+            job_id = data.get('job_id', None)
+
+            # Ensure at least one of internship_id or job_id is provided
+            if not internship_id and not job_id:
+                return JsonResponse({'error': 'Either internship_id or job_id must be provided'}, status=400)
+
+            # Execute SQL query to insert a new round
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO sample_rounds (round_no, round_name, date, time_scheduled, status, company_id, type, internship_id, job_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, [round_no, round_name, date, time_scheduled, status, company_id, type, internship_id, job_id])
+
+            return JsonResponse({'success': 'Round created successfully'}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+
+
+
+
+
+
+@csrf_exempt
+def internship_rounds(request, student_id):
+    # SQL query to join Applicants, Rounds, Internship, and Company tables
+    query = """
+        SELECT r.round_id, r.round_no, r.round_name, r.date, r.time_scheduled, r.status, c.name AS company_name, i.name AS internship_name
+        FROM sample_rounds AS r
+        INNER JOIN sample_applicants AS a ON r.internship_id = a.internship_id
+        INNER JOIN sample_internship AS i ON a.internship_id = i.internship_id
+        INNER JOIN sample_company AS c ON i.company_id = c.company_id
+        WHERE a.student_id = %s AND a.type = 'Internship';
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [student_id])
+        rows = cursor.fetchall()
+    
+    # Prepare response data
+    rounds_data = [
+        {
+            "round_id": row[0],
+            "round_no": row[1],
+            "round_name": row[2],
+            "date": row[3],
+            "time_scheduled": row[4],
+            "status": row[5],
+            "company_name": row[6],
+            "internship_name": row[7],
+        }
+        for row in rows
+    ]
+    
+    return JsonResponse(rounds_data, safe=False)
+
+
+@csrf_exempt
+def job_rounds(request, student_id):
+    # SQL query to join Applicants, Rounds, FullTime, and Company tables
+    query = """
+        SELECT r.round_id, r.round_no, r.round_name, r.date, r.time_scheduled, r.status, c.name AS company_name, f.job_title AS job_name
+        FROM sample_rounds AS r
+        INNER JOIN sample_applicants AS a ON r.job_id = a.job_id
+        INNER JOIN sample_fulltime AS f ON a.job_id = f.job_id
+        INNER JOIN sample_company AS c ON f.company_id = c.company_id
+        WHERE a.student_id = %s AND a.type = 'FullTime';
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [student_id])
+        rows = cursor.fetchall()
+    
+    # Prepare response data
+    rounds_data = [
+        {
+            "round_id": row[0],
+            "round_no": row[1],
+            "round_name": row[2],
+            "date": row[3],
+            "time_scheduled": row[4],
+            "status": row[5],
+            "company_name": row[6],
+            "job_name": row[7],
+        }
+        for row in rows
+    ]
+    
+    return JsonResponse(rounds_data, safe=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "DELETE"])
+def fulltime_detail(request, pk):
+    if request.method == "GET":
+        # SQL query to retrieve a FullTime job by ID
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM sample_fulltime WHERE job_id = %s", [pk])
+            row = cursor.fetchone()
+            if row:
+                columns = [col[0] for col in cursor.description]
+                data = dict(zip(columns, row))
+                return JsonResponse(data, safe=False)
+            return JsonResponse({"error": "FullTime job not found"}, status=404)
+
+    elif request.method == "PUT":
+        # SQL query to update a FullTime job by ID
+        data = json.loads(request.body)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE sample_fulltime 
+                SET job_title = %s, location = %s, package = %s, cutoff = %s, company_id = %s 
+                WHERE job_id = %s
+            """, [
+                data.get("job_title"),
+                data.get("location"),
+                data.get("package"),
+                data.get("cutoff"),
+                data.get("company_id"),
+                pk
+            ])
+        return JsonResponse({"message": "FullTime job updated successfully"})
+
+    elif request.method == "DELETE":
+        # SQL query to delete a FullTime job by ID
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM sample_fulltime WHERE job_id = %s", [pk])
+        return JsonResponse({"message": "FullTime job deleted successfully"})
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "DELETE"])
+def internship_detail(request, pk):
+    if request.method == "GET":
+        # SQL query to retrieve an Internship by ID
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM sample_internship WHERE internship_id = %s", [pk])
+            row = cursor.fetchone()
+            if row:
+                columns = [col[0] for col in cursor.description]
+                data = dict(zip(columns, row))
+                return JsonResponse(data, safe=False)
+            return JsonResponse({"error": "Internship not found"}, status=404)
+
+    elif request.method == "PUT":
+        # SQL query to update an Internship by ID
+        data = json.loads(request.body)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE sample_internship 
+                SET name = %s, location = %s, stipend = %s, ppo = %s, type = %s, duration = %s, cutoff = %s, company_id = %s 
+                WHERE internship_id = %s
+            """, [
+                data.get("name"),
+                data.get("location"),
+                data.get("stipend"),
+                data.get("ppo"),
+                data.get("type"),
+                data.get("duration"),
+                data.get("cutoff"),
+                data.get("company_id"),
+                pk
+            ])
+        return JsonResponse({"message": "Internship updated successfully"})
+
+    elif request.method == "DELETE":
+        # SQL query to delete an Internship by ID
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM sample_internship WHERE internship_id = %s", [pk])
+        return JsonResponse({"message": "Internship deleted successfully"})

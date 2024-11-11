@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Sample,Faculty,Company,Student,Applicants
 from django.contrib.auth.hashers import make_password
-from .models import Internship, FullTime
+from .models import Internship, FullTime, Rounds
 
 class SampleSerializers(serializers.ModelSerializer):
     class Meta:
@@ -92,3 +92,37 @@ class ApplicantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Applicants
         fields = ['applicant_id', 'student', 'type', 'internship', 'job', 'company']
+
+class RoundsSerializer(serializers.ModelSerializer):
+    applicant = ApplicantSerializer(read_only=True)  # Nested Applicant details (read-only)
+    applicant_id = serializers.PrimaryKeyRelatedField(
+        queryset=Applicants.objects.all(), source='applicant', write_only=True
+    )  # Write applicant ID when creating/updating
+
+    class Meta:
+        model = Rounds
+        fields = [
+            'round_id',
+            'round_no',
+            'round_name',
+            'date',
+            'time_scheduled',
+            'status',
+            'applicant',
+            'applicant_id',
+        ]
+        # Use applicant_id for input, and nested applicant details for output
+
+    def create(self, validated_data):
+        return Rounds.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        # Update fields as needed
+        instance.round_no = validated_data.get('round_no', instance.round_no)
+        instance.round_name = validated_data.get('round_name', instance.round_name)
+        instance.date = validated_data.get('date', instance.date)
+        instance.time_scheduled = validated_data.get('time_scheduled', instance.time_scheduled)
+        instance.status = validated_data.get('status', instance.status)
+        instance.applicant = validated_data.get('applicant', instance.applicant)
+        instance.save()
+        return instance        
