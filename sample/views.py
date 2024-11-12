@@ -167,9 +167,51 @@ class FullTimeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 @api_view(['GET'])
 def get_students_by_faculty(request, faculty_user_id):
-    students = Student.objects.filter(user_id=faculty_user_id)
-    serializer = StudentSerializerForFaculty(students, many=True)
-    return Response(serializer.data)
+    query = '''
+        SELECT 
+            s.student_id,
+            s.name,
+            s.SRN,
+            s.branch,
+            s.dob,
+            s.email,
+            s.ph_number,
+            s.gender,
+            s.cgpa, 
+            s.faculty_advisor,
+            f.name AS faculty_name,
+            f.email AS faculty_email
+        FROM 
+            sample_student s
+        JOIN 
+            sample_faculty f ON s.user_id_id = f.faculty_id
+        WHERE 
+            s.user_id_id = %s;
+    '''
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [faculty_user_id])
+        results = cursor.fetchall()
+
+    # Prepare the results
+    students = []
+    for row in results:
+        students.append({
+            'student_id': row[0],
+            'name': row[1],
+            'SRN': row[2],
+            'branch': row[3],
+            'dob': row[4],
+            'email': row[5],
+            'ph_number': row[6],
+            'gender': row[7],
+            'cgpa': row[8],
+            'faculty_advisor': row[9],
+            'faculty_name': row[10],
+            'faculty_email': row[11]
+        })
+    
+    return Response(students)
 
 @api_view(['GET'])
 def students_by_faculty_email(request, faculty_email):
@@ -363,7 +405,6 @@ def check_application_status(request):
 
 
 
-# Define a custom SQL query to fetch the required applicant data
 @api_view(['GET'])
 def get_applicants_for_company(request, company_id):
     query = '''
@@ -379,7 +420,8 @@ def get_applicants_for_company(request, company_id):
             s.faculty_advisor,
             i.name AS internship_name,
             f.job_title AS job_title,
-            a.type
+            a.type,
+            a.status
         FROM 
             sample_applicants a
         LEFT JOIN sample_student s ON a.student_id = s.student_id
@@ -414,10 +456,30 @@ def get_applicants_for_company(request, company_id):
             'job': {
                 'name': row[10] if row[10] else None
             },
-            'type': row[11]
+            'type': row[11],
+            'status': row[12]
         })
 
     return Response(applicants)
+
+@csrf_exempt
+@api_view(['PUT'])
+def toggle_applicant_status(request, applicant_id):
+    # SQL query to toggle status between 'selected' and 'notselected'
+    query = '''
+        UPDATE sample_applicants
+        SET status = CASE 
+                        WHEN status = 'selected' THEN 'notselected'
+                        ELSE 'selected'
+                     END
+        WHERE applicant_id = %s
+    '''
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [applicant_id])
+    
+    # Return success response
+    return Response({"message": "Applicant status updated successfully."}, status=status.HTTP_200_OK)
 
 
 
@@ -771,7 +833,7 @@ def job_rounds(request, student_id):
 
 
 
-
+from django.db import connection, IntegrityError, transaction
 
 
 
@@ -808,10 +870,19 @@ def fulltime_detail(request, pk):
         return JsonResponse({"message": "FullTime job updated successfully"})
 
     elif request.method == "DELETE":
-        # SQL query to delete a FullTime job by ID
-        with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM sample_fulltime WHERE job_id = %s", [pk])
-        return JsonResponse({"message": "FullTime job deleted successfully"})
+        try:
+            with transaction.atomic():  # Ensures all-or-nothing execution
+                with connection.cursor() as cursor:
+                # First, delete dependent records in Rounds and Applicants if not set to cascade
+                    cursor.execute("DELETE FROM sample_rounds WHERE job_id = %s", [pk])
+                    cursor.execute("DELETE FROM sample_applicants WHERE job_id = %s", [pk])
+                
+                # Then delete the FullTime job
+                    cursor.execute("DELETE FROM sample_fulltime WHERE job_id = %s", [pk])
+                
+            return JsonResponse({"message": "FullTime job deleted successfully"})
+        except IntegrityError:
+            return JsonResponse({"error": "Cannot delete FullTime job; it has related records."}, status=400)
 
 
 @csrf_exempt
@@ -850,7 +921,118 @@ def internship_detail(request, pk):
         return JsonResponse({"message": "Internship updated successfully"})
 
     elif request.method == "DELETE":
-        # SQL query to delete an Internship by ID
+        try:
+            with transaction.atomic():  # Ensures all-or-nothing execution
+                with connection.cursor() as cursor:
+                # First, delete dependent records in Rounds and Applicants if not set to cascade
+                    cursor.execute("DELETE FROM sample_rounds WHERE internship_id = %s", [pk])
+                    cursor.execute("DELETE FROM sample_applicants WHERE internship_id = %s", [pk])
+                
+                # Then delete the Internship
+                    cursor.execute("DELETE FROM sample_internship WHERE internship_id = %s", [pk])
+                
+            return JsonResponse({"message": "Internship deleted successfully"})
+        except IntegrityError:
+            return JsonResponse({"error": "Cannot delete internship; it has related records."}, status=400)
+        
+
+
+
+
+
+
+
+
+@csrf_exempt
+def get_rounds_company_internship_fulltime(request, company_id, id):
+    try:
+        # Determine if ID is an internship or full-time job
+        rounds = []
         with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM sample_internship WHERE internship_id = %s", [pk])
-        return JsonResponse({"message": "Internship deleted successfully"})
+            cursor.execute("""
+                SELECT round_id, round_no, round_name, date, time_scheduled, status, type
+                FROM sample_rounds
+                WHERE company_id = %s AND (internship_id = %s OR job_id = %s)
+            """, [company_id, id, id])
+            rows = cursor.fetchall()
+
+            # Format result
+            rounds = [
+                {
+                    "round_id": row[0],
+                    "round_no": row[1],
+                    "round_name": row[2],
+                    "date": row[3],
+                    "time_scheduled": row[4],
+                    "status": row[5],
+                    "type": row[6],
+                }
+                for row in rows
+            ]
+
+        return JsonResponse({"rounds": rounds}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+
+
+
+
+
+
+@csrf_exempt
+def delete_round(request, round_id):
+    if request.method == "DELETE":
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM rounds WHERE round_id = %s", [round_id])
+            return JsonResponse({"message": "Round deleted successfully"}, status=200)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+    
+
+
+
+
+@api_view(['GET'])
+def get_students_results_by_faculty(request, faculty_id):
+    query = '''
+        SELECT 
+            s.name AS student_name,
+            c.name AS company_name,
+            a.type AS application_type,
+            COALESCE(f.job_title, i.name) AS post,
+            COALESCE(f.package, i.stipend) AS compensation,
+            s.SRN AS srn
+        FROM 
+            sample_applicants a
+        JOIN sample_student s ON a.student_id = s.student_id
+        JOIN sample_company c ON a.company_id = c.company_id
+        LEFT JOIN sample_fulltime f ON a.job_id = f.job_id
+        LEFT JOIN sample_internship i ON a.internship_id = i.internship_id
+        WHERE 
+            a.status = 'selected'
+            AND s.user_id_id = %s
+    '''
+
+    # Execute the SQL query
+    with connection.cursor() as cursor:
+        cursor.execute(query, [faculty_id])
+        results = cursor.fetchall()
+
+    # Format the results as a list of dictionaries for the response
+    students = []
+    for row in results:
+        students.append({
+            'student_name': row[0],
+            'company_name': row[1],
+            'application_type': row[2],
+            'post': row[3],
+            'compensation': row[4],
+            'srn': row[5]
+        })
+
+    return Response(students)    

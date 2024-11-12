@@ -111,8 +111,8 @@ class Rounds(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Scheduled')
     company = models.ForeignKey(Company, on_delete=models.CASCADE,default=None)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=None)
-    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.SET_NULL,default=None)
-    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.SET_NULL,default=None)
+    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.CASCADE,default=None)
+    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.CASCADE,default=None)
 
     def __str__(self):
         return f"Round {self.round_no} - {self.round_name} - {self.get_status_display()}"
@@ -124,16 +124,22 @@ class Applicants(models.Model):
         ('Internship', 'Internship'),
         ('FullTime', 'FullTime')
     ]
+    
+    STATUS_CHOICES = [
+        ('selected', 'Selected'),
+        ('notselected', 'Not Selected')
+    ]
 
     applicant_id = models.AutoField(primary_key=True)
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     type = models.CharField(max_length=10, choices=APPLICATION_TYPE_CHOICES)
-    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.SET_NULL)
-    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.SET_NULL)
+    internship = models.ForeignKey(Internship, null=True, blank=True, on_delete=models.CASCADE)
+    job = models.ForeignKey(FullTime, null=True, blank=True, on_delete=models.CASCADE)
+    status = models.CharField(max_length=11, choices=STATUS_CHOICES, default='notselected')
 
     def __str__(self):
-        return f"{self.student.name} - {self.type} - {self.company.name}"
+        return f"{self.student.name} - {self.type} - {self.company.name} - {self.status}"
 
     class Meta:
         unique_together = ('student', 'company', 'type', 'internship', 'job')

@@ -53,7 +53,7 @@ urlpatterns = [
     path('api/apply/', views.apply, name="apply"),
     path('api/check_application_status/', views.check_application_status, name='check-application-status'),
     path('api/applicants/company/<int:company_id>/', views.get_applicants_for_company),
-
+    path('api/applicants/toggle-status/<int:applicant_id>/', views.toggle_applicant_status, name='toggle_applicant_status'),
 
     path('update/faculty/<int:faculty_id>/', views.update_faculty_profile, name='update_faculty'),
     path('update/student/<int:student_id>/', views.update_student_profile, name='update_student'),
@@ -68,8 +68,13 @@ urlpatterns = [
     path('api/internship_rounds/<int:student_id>/', views.internship_rounds, name='internship-rounds'),
     path('api/fulltime_rounds/<int:student_id>/', views.job_rounds, name='job-rounds'),
 
-    path('api/fulltime/<int:pk>/', views.fulltime_detail, name='fulltime-detail'),
-    path('api/internship/<int:pk>/', views.internship_detail, name='internship-detail'),
+    path('api/fulltime-operation/<int:pk>/', views.fulltime_detail, name='fulltime-detail'),
+    path('api/internship-operation/<int:pk>/', views.internship_detail, name='internship-detail'),
+
+    path('api/<int:company_id>/rounds/<int:id>/', views.get_rounds_company_internship_fulltime, name='get_rounds'),
+    path('api/rounds/delete/<int:round_id>/', views.delete_round, name='delete_round'),
+
+    path('api/students-result/faculty/<int:faculty_id>/', views.get_students_results_by_faculty, name='get_students_by_faculty'),
 ]
 
 
