@@ -1,6 +1,4 @@
 from django.http import JsonResponse
-from .models import Sample
-from .serializers import SampleSerializers
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -26,39 +24,15 @@ from .serializers import InternshipSerializer, FullTimeSerializer, StudentSerial
 
 from rest_framework.response import Response
 from .serializers import StudentSerializer
-
-@api_view(['GET','POST'])
-def sample_list(request):
-
-    if request.method == 'GET':
-        sample = Sample.objects.all()
-        serializer = SampleSerializers(sample, many = True)
-        return JsonResponse({'sample':serializer.data})   
-
-    if request.method == 'POST':
-        serializer = SampleSerializers(data = request.data)  
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status = status.HTTP_201_CREATED)
-
-@api_view(['GET','PUT','DELETE'])        
-def sample_detail(request,id):
-
-    if request.method == 'GET':
-        SampleSerializers()
-    if request.method == 'PUT':
-        pass
-    if request.method == 'DELETE':
-        pass       
-
-
+from django.views.decorators.csrf import csrf_exempt
+     
 @api_view(['POST'])
 def login_faculty(request):
     email = request.data.get('email')
     password = request.data.get('password')
     faculty = get_object_or_404(Faculty, email=email)
     if check_password(password, faculty.password):
-        return Response({'message': 'Login successful', 'user_id': faculty.faculty_id}, status=status.HTTP_200_OK)
+        return Response({'message': 'Login successful', 'user_id': faculty.faculty_id, 'name': faculty.name}, status=status.HTTP_200_OK)
     return Response({'message': 'Login Unsuccessful'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -67,7 +41,7 @@ def login_company(request):
     password = request.data.get('password')
     company = get_object_or_404(Company, name=name)
     if check_password(password, company.password):
-        return Response({'message': 'Login successful', 'user_id': company.company_id}, status=status.HTTP_200_OK)
+        return Response({'message': 'Login successful', 'user_id': company.company_id,'name': company.name}, status=status.HTTP_200_OK)
     return Response({'message': 'Login Unsuccessful'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -89,7 +63,8 @@ def login_student(request):
         return Response({
             'message': 'Login successful',
             'student_id': student.student_id,
-            'student_cgpa': student.cgpa if student.cgpa is not None else None  # Converts Decimal to float or returns None
+            'student_cgpa': student.cgpa if student.cgpa is not None else None,  # Converts Decimal to float or returns None
+            'name': student.name
         }, status=status.HTTP_200_OK)
 
     # If the password is incorrect
@@ -101,29 +76,54 @@ def login_student(request):
 
 
 
+@csrf_exempt
 @api_view(['POST'])
 def register_student(request):
-    serializer = StudentSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Student registered successfully"}, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    hashed_password = make_password(data['password'])
+    query = """
+        INSERT INTO sample_student (name, email, ph_number, password)
+        VALUES (%s, %s, %s, %s)
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query, [data['name'], data['email'], data['ph_number'], hashed_password])
+        return JsonResponse({"message": "Student registered successfully"}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
-def register_company(request):
-    serializer = CompanySerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Company registered successfully"}, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+@csrf_exempt
 @api_view(['POST'])
 def register_faculty(request):
-    serializer = FacultySerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Faculty registered successfully"}, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    hashed_password = make_password(data['password'])
+    query = """
+        INSERT INTO sample_faculty (name, email, ph_number, password)
+        VALUES (%s, %s, %s, %s)
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query, [data['name'], data['email'], data['ph_number'], hashed_password])
+        return JsonResponse({"message": "Faculty registered successfully"}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@csrf_exempt
+@api_view(['POST'])
+def register_company(request):
+    data = request.data
+    hashed_password = make_password(data['password'])
+    query = """
+        INSERT INTO sample_company (name, email, ph_number, password)
+        VALUES (%s, %s, %s, %s)
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query, [data['name'], data['email'], data['ph_number'], hashed_password])
+        return JsonResponse({"message": "Company registered successfully"}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 
@@ -494,91 +494,79 @@ def toggle_applicant_status(request, applicant_id):
 
 
 # Faculty Update API - Only password, email, and phone number can be changed
+@csrf_exempt
 @api_view(['PUT'])
 def update_faculty_profile(request, faculty_id):
     """
-    Update Faculty profile by faculty_id, allowing partial updates.
+    Update Faculty profile by faculty_id, allowing partial updates on specific fields.
     """
     try:
         # Check if the faculty member exists
-        try:
-            Faculty.objects.get(faculty_id=faculty_id)
-        except Faculty.DoesNotExist:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM sample_faculty WHERE faculty_id = %s", [faculty_id])
+            faculty = cursor.fetchone()
+        
+        if not faculty:
             return Response({'message': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Define fields to update
         fields_to_update = {}
-
-        if request.data.get('role') is not None:
-            fields_to_update['role'] = request.data.get('role')
-
-        if request.data.get('staff_id') is not None:
-            fields_to_update['staff_id'] = request.data.get('staff_id')
-
-        if request.data.get('name') is not None:
-            fields_to_update['name'] = request.data.get('name')
-
+        
         if request.data.get('email') is not None:
             fields_to_update['email'] = request.data.get('email')
-
+        
         if request.data.get('ph_number') is not None:
             fields_to_update['ph_number'] = request.data.get('ph_number')
-
-        if request.data.get('department') is not None:
-            fields_to_update['department'] = request.data.get('department')
-
+        
         if request.data.get('password') is not None:
             fields_to_update['password'] = make_password(request.data.get('password'))
 
         # Construct dynamic SQL query for partial updates
-        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
-        query = f"UPDATE sample_faculty SET {set_clause} WHERE faculty_id = %s"
-
-        # Execute query with values in correct order
-        with connection.cursor() as cursor:
-            cursor.execute(query, list(fields_to_update.values()) + [faculty_id])
+        if fields_to_update:
+            set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+            query = f"UPDATE sample_faculty SET {set_clause} WHERE faculty_id = %s"
+            with connection.cursor() as cursor:
+                cursor.execute(query, list(fields_to_update.values()) + [faculty_id])
 
         return Response({"message": "Faculty profile updated successfully"}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
-# Student Update API - Only password, email, and phone number can be changed
+# Student Update API - Only email, phone number, and password can be changed
+@csrf_exempt
 @api_view(['PUT'])
 def update_student_profile(request, student_id):
     """
-    Update Student profile by student_id, allowing partial updates.
+    Update Student profile by student_id, allowing partial updates on specific fields.
     """
     try:
         # Check if the student exists
-        try:
-            Student.objects.get(student_id=student_id)
-        except Student.DoesNotExist:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM sample_student WHERE student_id = %s", [student_id])
+            student = cursor.fetchone()
+        
+        if not student:
             return Response({'message': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Define fields to update
         fields_to_update = {}
-
-        if request.data.get('name') is not None:
-            fields_to_update['name'] = request.data.get('name')
-
+        
         if request.data.get('email') is not None:
             fields_to_update['email'] = request.data.get('email')
-
+        
         if request.data.get('ph_number') is not None:
             fields_to_update['ph_number'] = request.data.get('ph_number')
-
+        
         if request.data.get('password') is not None:
             fields_to_update['password'] = make_password(request.data.get('password'))
 
         # Construct dynamic SQL query for partial updates
-        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
-        query = f"UPDATE sample_student SET {set_clause} WHERE student_id = %s"
-
-        # Execute query with values in correct order
-        with connection.cursor() as cursor:
-            cursor.execute(query, list(fields_to_update.values()) + [student_id])
+        if fields_to_update:
+            set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+            query = f"UPDATE sample_student SET {set_clause} WHERE student_id = %s"
+            with connection.cursor() as cursor:
+                cursor.execute(query, list(fields_to_update.values()) + [student_id])
 
         return Response({"message": "Student profile updated successfully"}, status=status.HTTP_200_OK)
 
@@ -586,48 +574,49 @@ def update_student_profile(request, student_id):
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Company Update API
-
+# Company Update API - Only name, type, location, email, and password can be changed
+@csrf_exempt
 @api_view(['PUT'])
 def update_company_profile(request, company_id):
     """
-    Update Company profile by company_id, allowing partial updates.
+    Update Company profile by company_id, allowing partial updates on specific fields.
     """
     try:
         # Check if the company exists
-        try:
-            Company.objects.get(company_id=company_id)
-        except Company.DoesNotExist:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM sample_company WHERE company_id = %s", [company_id])
+            company = cursor.fetchone()
+        
+        if not company:
             return Response({'message': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Get allowed fields from request body
+
+        # Define fields to update
         fields_to_update = {}
-        
+
         if request.data.get('name') is not None:
             fields_to_update['name'] = request.data.get('name')
         
         if request.data.get('type') is not None:
             fields_to_update['type'] = request.data.get('type')
         
-        if request.data.get('designation_role') is not None:
-            fields_to_update['designation_role'] = request.data.get('designation_role')
-        
         if request.data.get('location') is not None:
             fields_to_update['location'] = request.data.get('location')
+        
+        if request.data.get('email') is not None:
+            fields_to_update['email'] = request.data.get('email')
         
         if request.data.get('password') is not None:
             fields_to_update['password'] = make_password(request.data.get('password'))
 
         # Construct dynamic SQL query for partial updates
-        set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
-        query = f"UPDATE sample_company SET {set_clause} WHERE company_id = %s"
-        
-        # Execute query with values in correct order
-        with connection.cursor() as cursor:
-            cursor.execute(query, list(fields_to_update.values()) + [company_id])
+        if fields_to_update:
+            set_clause = ", ".join([f"{field} = %s" for field in fields_to_update.keys()])
+            query = f"UPDATE sample_company SET {set_clause} WHERE company_id = %s"
+            with connection.cursor() as cursor:
+                cursor.execute(query, list(fields_to_update.values()) + [company_id])
 
         return Response({"message": "Company profile updated successfully"}, status=status.HTTP_200_OK)
-    
+
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -649,17 +638,13 @@ from django.views.decorators.http import require_http_methods
 @require_http_methods(["GET"])
 def get_faculty_profile(request, user_id):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT faculty_id, role, staff_id, name, email, ph_number, department FROM sample_faculty WHERE faculty_id = %s", [user_id])
+        cursor.execute("SELECT email, ph_number FROM sample_faculty WHERE faculty_id = %s", [user_id])
         row = cursor.fetchone()
 
     if row:
         data = {
-            "role": row[1],
-            "staff_id": row[2],
-            "name": row[3],
-            "email": row[4],
-            "ph_number": row[5],
-            "department": row[6],
+            "email": row[0],
+            "ph_number": row[1],
         }
         return JsonResponse(data)
     else:
@@ -669,20 +654,13 @@ def get_faculty_profile(request, user_id):
 @require_http_methods(["GET"])
 def get_student_profile(request, user_id):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT student_id, name, SRN, branch, dob, email, ph_number, gender, cgpa, faculty_advisor FROM sample_student WHERE student_id = %s", [user_id])
+        cursor.execute("SELECT email, ph_number FROM sample_student WHERE student_id = %s", [user_id])
         row = cursor.fetchone()
 
     if row:
         data = {
-            "name": row[1],
-            "SRN": row[2],
-            "branch": row[3],
-            "dob": row[4],
-            "email": row[5],
-            "ph_number": row[6],
-            "gender": row[7],
-            "cgpa": row[8],
-            "faculty_advisor": row[9],
+            "email": row[0],
+            "ph_number": row[1],
         }
         return JsonResponse(data)
     else:
@@ -692,20 +670,19 @@ def get_student_profile(request, user_id):
 @require_http_methods(["GET"])
 def get_company_profile(request, user_id):
     with connection.cursor() as cursor:
-        cursor.execute("SELECT company_id, name, type, designation_role, location, package FROM sample_company WHERE company_id = %s", [user_id])
+        cursor.execute("SELECT name, type, location, email FROM sample_company WHERE company_id = %s", [user_id])
         row = cursor.fetchone()
 
     if row:
         data = {
-            "name": row[1],
-            "type": row[2],
-            "designation_role": row[3],
-            "location": row[4],
-            "package": row[5],
+            "name": row[0],
+            "type": row[1],
+            "location": row[2],
+            "email": row[3],
         }
         return JsonResponse(data)
     else:
-        return JsonResponse({"error": "Company not found"}, status=404)    
+        return JsonResponse({"error": "Company not found"}, status=404)      
     
 
 
@@ -719,7 +696,6 @@ def create_round(request):
         try:
             # Load JSON data from the request body
             data = json.loads(request.body)
-            print(data)
             # Retrieve data with default values
             company_id = data.get('company_id')
             round_no = data.get('round_no', -1)
@@ -986,7 +962,7 @@ def delete_round(request, round_id):
     if request.method == "DELETE":
         try:
             with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM rounds WHERE round_id = %s", [round_id])
+                cursor.execute("DELETE FROM sample_rounds WHERE round_id = %s", [round_id])
             return JsonResponse({"message": "Round deleted successfully"}, status=200)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
@@ -1036,3 +1012,65 @@ def get_students_results_by_faculty(request, faculty_id):
         })
 
     return Response(students)    
+
+
+@csrf_exempt
+def check_selected_status(request, student_id):
+    with connection.cursor() as cursor:
+        query = '''
+            SELECT c.name AS company_name, a.type, 
+                   COALESCE(i.stipend, f.package) AS offer_amount 
+            FROM sample_applicants a
+            LEFT JOIN sample_internship i ON a.internship_id = i.internship_id
+            LEFT JOIN sample_fulltime f ON a.job_id = f.job_id
+            JOIN sample_company c ON a.company_id = c.company_id
+            WHERE a.student_id = %s AND a.status = 'selected'
+        '''
+        cursor.execute(query, [student_id])
+        result = cursor.fetchone()
+
+        if result:
+            return JsonResponse({
+                'selected': True,
+                'company_name': result[0],
+                'type': result[1],
+                'offer_amount': result[2]
+            })
+        else:
+            return JsonResponse({'selected': False})
+        
+
+@csrf_exempt
+def toggle_round_status(request, round_id):
+    try:
+        with connection.cursor() as cursor:
+            # Query to get the current status of the round
+            cursor.execute('''
+                SELECT status FROM sample_rounds WHERE round_id = %s
+            ''', [round_id])
+            result = cursor.fetchone()
+
+            if result:
+                current_status = result[0]
+                # Toggle the status based on the current one
+                if current_status == 'Scheduled':
+                    new_status = 'Completed'
+                elif current_status == 'Completed':
+                    new_status = 'Cancelled'
+                else:
+                    new_status = 'Scheduled'
+
+                # Update the status in the database
+                cursor.execute('''
+                    UPDATE sample_rounds
+                    SET status = %s
+                    WHERE round_id = %s
+                ''', [new_status, round_id])
+
+                return JsonResponse({'status': 'success', 'new_status': new_status})
+
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Round not found'})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})        

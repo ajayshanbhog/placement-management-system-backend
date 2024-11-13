@@ -1,19 +1,9 @@
 from django.db import models
 from datetime import date, time
 
-class Sample(models.Model):
-    name = models.CharField(max_length=200)
-    description = models.CharField(max_length=500)
-
-    def __str__(self):
-        return "\""+self.name +"\" \""+self.description+"\""
-    
-
 class Faculty(models.Model):
     faculty_id = models.AutoField(primary_key=True)
     role = models.CharField(max_length=50)
-    staff_id = models.CharField(max_length=10, unique=True)
-    user_id = models.IntegerField(unique=True)
     password = models.CharField(max_length=255)
     name = models.CharField(max_length=50)
     email = models.EmailField(unique=True)
@@ -52,10 +42,9 @@ class Company(models.Model):
     company_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=50, blank=True, null=True)
-    designation_role = models.CharField(max_length=50, blank=True, null=True)
+    ph_number = models.CharField(max_length=15, blank=True, null=True)
     location = models.CharField(max_length=100, blank=True, null=True)
-    package = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    user_id = models.IntegerField(unique=True)
+    email = models.EmailField(unique=True,default=None)
     password = models.CharField(max_length=255)
 
     def __str__(self):

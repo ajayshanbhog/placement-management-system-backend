@@ -1,12 +1,8 @@
 from rest_framework import serializers
-from .models import Sample,Faculty,Company,Student,Applicants
+from .models import Faculty,Company,Student,Applicants
 from django.contrib.auth.hashers import make_password
 from .models import Internship, FullTime, Rounds
 
-class SampleSerializers(serializers.ModelSerializer):
-    class Meta:
-        model = Sample
-        fields = ['id','name','description']
 
 
 
@@ -28,10 +24,6 @@ class StudentLoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     
-
-
-
-
 
 class FacultySerializer(serializers.ModelSerializer):
     class Meta:
@@ -66,9 +58,6 @@ class StudentSerializerForFaculty(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = ['student_id', 'name', 'SRN', 'branch', 'dob', 'email', 'ph_number', 'gender', 'cgpa', 'faculty_advisor']    
-
-
-
 
 
 

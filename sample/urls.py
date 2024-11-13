@@ -17,18 +17,18 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path
-from sample import views
 from . import views
 
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('sample/',views.sample_list),
-    path('sample/<int:id>',views.sample_detail),
+    # Api for Login
     path('login/faculty', views.login_faculty, name='login_faculty'),
     path('login/company', views.login_company, name='login_company'),
     path('login/student', views.login_student, name='login_student'),
+
+    # Api for Register
     path('register/student/', views.register_student, name='register_student'),
     path('register/company/', views.register_company, name='register_company'),
     path('register/faculty/', views.register_faculty, name='register_faculty'),
@@ -55,13 +55,15 @@ urlpatterns = [
     path('api/applicants/company/<int:company_id>/', views.get_applicants_for_company),
     path('api/applicants/toggle-status/<int:applicant_id>/', views.toggle_applicant_status, name='toggle_applicant_status'),
 
+    # Api for Profile 
+    path('get/faculty/<int:user_id>/', views.get_faculty_profile, name='get_faculty_profile'),
+    path('get/student/<int:user_id>/', views.get_student_profile, name='get_student_profile'),
+    path('get/company/<int:user_id>/', views.get_company_profile, name='get_company_profile'),    
     path('update/faculty/<int:faculty_id>/', views.update_faculty_profile, name='update_faculty'),
     path('update/student/<int:student_id>/', views.update_student_profile, name='update_student'),
     path('update/company/<int:company_id>/', views.update_company_profile, name='update_company'),
 
-    path('get/faculty/<int:user_id>/', views.get_faculty_profile, name='get_faculty_profile'),
-    path('get/student/<int:user_id>/', views.get_student_profile, name='get_student_profile'),
-    path('get/company/<int:user_id>/', views.get_company_profile, name='get_company_profile'),
+
 
     path('api/create/round/', views.create_round, name='create_round'),
 
@@ -75,6 +77,9 @@ urlpatterns = [
     path('api/rounds/delete/<int:round_id>/', views.delete_round, name='delete_round'),
 
     path('api/students-result/faculty/<int:faculty_id>/', views.get_students_results_by_faculty, name='get_students_by_faculty'),
+
+    path('api/check_selected_status/<int:student_id>/', views.check_selected_status, name='check_selected_status'),
+    path('api/rounds/toggle-status/<int:round_id>/', views.toggle_round_status, name='toggle_round_status'),    
 ]
 
 
